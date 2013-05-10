@@ -1,6 +1,8 @@
 package
 {
+	import flash.display.InteractiveObject;
 	import flash.display.Sprite;
+	import flash.events.MouseEvent;
 	import flash.events.NetStatusEvent;
 	import flash.events.SecurityErrorEvent;
 	import flash.external.ExternalInterface;
@@ -8,6 +10,8 @@ package
 	import flash.net.NetConnection;
 	import flash.net.NetStream;
 	import flash.system.Security;
+
+	[SWF(width='480',height='270',backgroundColor='#000000',frameRate='25')]
 	
 	public class SimpleStreamingVideoPlayer extends Sprite
 	{
@@ -17,34 +21,45 @@ package
 		
 		private var remoteVideo:Video;
 		
-		public var videoWidth;
-		public var videoHeight;
-
+		public var videoWidth = 480;
+		public var videoHeight = 270;
+		
 		public function SimpleStreamingVideoPlayer()
 		{
 			Security.allowDomain("*");
-
+			
 			if (ExternalInterface.available) 
 			{	
 				log("ExternalInterface.avaialble");
 				
-				ExternalInterface.addCallback("start", startStream);
-				ExternalInterface.addCallback("disconnect", disconnectStream);
-			
-				ExternalInterface.call("playerInit");
-				ExternalInterface.call("playerEvent");
+				ExternalInterface.addCallback("startStream", startStream);
+				ExternalInterface.addCallback("disconnectStream", disconnectStream);
+				ExternalInterface.addCallback("log", log);
+				
+				ExternalInterface.call("playerInit",ExternalInterface.objectID);
 			}
+									
+			remoteVideo = new Video();										
+			addChild(remoteVideo);
 			
-			startStream("rtmp://128.122.151.16/live","ptzcamera.stream");
+			var transparentSprite:Sprite = new Sprite();
+			transparentSprite.graphics.beginFill(0x00ff00, 0);
+			transparentSprite.graphics.drawRect(0, 0, videoWidth, videoHeight);
+			transparentSprite.graphics.endFill();
+			addChild(transparentSprite);
+			
+			addEventListener(MouseEvent.CLICK, playerClicked);
+						
+			setDimensions(videoWidth, videoHeight);
 		}
 		
 		private function log(message:String) {
-			if (ExternalInterface.available) {
-				ExternalInterface.call( "console.log" , message);
-			}
 			trace(message);
+			if (ExternalInterface.available) {
+				ExternalInterface.call("console.log", message);
+			}
 		}
-
+		
 		private function startStream(_server:String, _stream:String)
 		{
 			server = _server;
@@ -72,18 +87,24 @@ package
 			log("cuePoint");
 		}
 		
+		private function sdes(infoObject:Object): void {
+			log("sdes");
+		}
+		
 		private function metaData(infoObject:Object):void {
 			log("metaData");
 			
-			//setDimensions(infoObject.width, infoObject.height);
+			if (infoObject.width != null && infoObject.hight != null) {
+				setDimensions(infoObject.width, infoObject.height);
+			}
 			
 			/*
 			// Make sure it fits on the screen
 			var resizeFactor:Number = 1;
 			if (video.width > nativeWindows[1].width && video.width - nativeWindows[1].width > video.height - nativeWindows[1].height) {
-				resizeFactor = nativeWindows[1].width/video.width;
+			resizeFactor = nativeWindows[1].width/video.width;
 			} else if (video.height > nativeWindows[1].height) {
-				resizeFactor = nativeWindows[1].height/video.height;
+			resizeFactor = nativeWindows[1].height/video.height;
 			}
 			trace("Video Width: " + video.width);
 			trace("Video Height: " + video.height);
@@ -130,39 +151,46 @@ package
 					var dumbObject:Object = new Object();
 					dumbObject.onCuePoint = cuePoint; 
 					dumbObject.onMetaData = metaData;
-					inStream.client = this;
+					dumbObject.onSDES = sdes;
+					inStream.client = dumbObject;
 					
 					inStream.play(stream);
 					
-					remoteVideo = new Video();
 					remoteVideo.attachNetStream(inStream);
-					
-					setDimensions(480, 270);
-										
-					addChild(remoteVideo);
 					
 					break;
 				
 				case "NetStream.Play.StreamNotFound":
-				
+					
 					break;
 				
 				default:
-
+					
 					break;
 			}
 		}
 		
-		private function setDimensions(_width:Number, _height:Number):void {
+		public function playerClicked(event:MouseEvent):void 
+		{
+			log("playerClicked");
+			if (ExternalInterface.available) {
+				ExternalInterface.call("playerClicked", ExternalInterface.objectID);
+			}
+		}
+		
+		private function setDimensions(_width:Number, _height:Number):void 
+		{
+			log("setDimensions: " + _width + " " + _height);	
+			
+			this.width = _width;
+			this.height = _height;
 			
 			if (remoteVideo != null) {
+				log("setDimensions: " + _width + " " + _height);	
+				
 				remoteVideo.width = _width;
 				remoteVideo.height = _height;
-			
-				//this.width = _width;
-				//this.height = _height;
 			}
-			
 		}
 	}
 }
