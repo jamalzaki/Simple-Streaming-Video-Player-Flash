@@ -5,10 +5,12 @@ package
 	import flash.events.MouseEvent;
 	import flash.events.NetStatusEvent;
 	import flash.events.SecurityErrorEvent;
+	import flash.events.SyncEvent;
 	import flash.external.ExternalInterface;
 	import flash.media.Video;
 	import flash.net.NetConnection;
 	import flash.net.NetStream;
+	import flash.net.SharedObject;
 	import flash.system.Security;
 
 	[SWF(width='480',height='270',backgroundColor='#000000',frameRate='25')]
@@ -24,6 +26,10 @@ package
 		public var videoWidth = 480;
 		public var videoHeight = 270;
 		
+		public var so:SharedObject;
+		public var soName:String;
+
+		
 		public function SimpleStreamingVideoPlayer()
 		{
 			Security.allowDomain("*");
@@ -35,6 +41,7 @@ package
 				ExternalInterface.addCallback("startStream", startStream);
 				ExternalInterface.addCallback("disconnectStream", disconnectStream);
 				ExternalInterface.addCallback("log", log);
+				ExternalInterface.addCallback("connectToSharedObject", connectToSharedObject);
 				
 				ExternalInterface.call("playerInit",ExternalInterface.objectID);
 			}
@@ -94,29 +101,10 @@ package
 		private function metaData(infoObject:Object):void {
 			log("metaData");
 			
-			if (infoObject.width != null && infoObject.hight != null) {
+			/*
+			if (infoObject.width != null && infoObject.height != null) {
 				setDimensions(infoObject.width, infoObject.height);
 			}
-			
-			/*
-			// Make sure it fits on the screen
-			var resizeFactor:Number = 1;
-			if (video.width > nativeWindows[1].width && video.width - nativeWindows[1].width > video.height - nativeWindows[1].height) {
-			resizeFactor = nativeWindows[1].width/video.width;
-			} else if (video.height > nativeWindows[1].height) {
-			resizeFactor = nativeWindows[1].height/video.height;
-			}
-			trace("Video Width: " + video.width);
-			trace("Video Height: " + video.height);
-			trace("Resize Factor: " + resizeFactor);
-			
-			video.width = video.width * resizeFactor;
-			video.height = video.height * resizeFactor;
-			
-			trace("x math: " + (nativeWindows[1].width - video.width)/2);
-			trace("y math: " + (nativeWindows[1].height - video.height)/2);
-			video.x = (nativeWindows[1].width - video.width)/2;
-			video.y = (nativeWindows[1].height - video.height)/2;
 			*/
 			
 			var key:String;
@@ -141,6 +129,10 @@ package
 		{
 			log(event.info.code);
 			
+			if (ExternalInterface.available) {
+				ExternalInterface.call("netconnectionStatus", ExternalInterface.objectID, event.info.code);
+			}
+			
 			switch (event.info.code) 
 			{		
 				case "NetConnection.Connect.Success":
@@ -157,7 +149,7 @@ package
 					inStream.play(stream);
 					
 					remoteVideo.attachNetStream(inStream);
-					
+										
 					break;
 				
 				case "NetStream.Play.StreamNotFound":
@@ -167,6 +159,34 @@ package
 				default:
 					
 					break;
+			}
+		}
+		
+		private function connectToSharedObject(_soName:String):void
+		{
+			log("connectToSharedObject " + _soName);
+			
+			soName = _soName;
+			
+			so = SharedObject.getRemote(soName,nc.uri,true);
+			so.addEventListener (SyncEvent.SYNC,syncEventHandler);
+			so.connect(nc);
+		}
+		
+		private function syncEventHandler(syncEvent:SyncEvent):void 
+		{
+			for (var i:int = 0; i < syncEvent.changeList.length; i++) 
+			{
+				var key:String  = syncEvent.changeList[i].name;
+				var value:String = so.data[syncEvent.changeList[i].name];
+				var code:String = syncEvent.changeList[i].code;
+				
+				log("syncEventHandler: " + key + " " + value + " " + code);
+				
+				if (ExternalInterface.available) 
+				{	
+					ExternalInterface.call("syncEvent", ExternalInterface.objectID, key,value,code);
+				} 
 			}
 		}
 		
@@ -185,11 +205,28 @@ package
 			this.width = _width;
 			this.height = _height;
 			
+			remoteVideo.width = _width;
+			remoteVideo.height = _height;
+			
+			/*			
 			if (remoteVideo != null) {
 				log("setDimensions: " + _width + " " + _height);	
-				
-				remoteVideo.width = _width;
-				remoteVideo.height = _height;
+
+				var resizeFactor:Number = 1;
+				if (_width > width && _width - width > _height - height) {
+					resizeFactor = width/_width;
+				} else if (_height > height) {
+					resizeFactor = height/_height;
+				}
+
+				remoteVideo.width = _width * resizeFactor;
+				remoteVideo.height = _height * resizeFactor;
+			}
+			*/
+
+			if (ExternalInterface.available)
+			{
+				ExternalInterface.call("dimensionsChanged", ExternalInterface.objectID, _width, _height);
 			}
 		}
 	}
